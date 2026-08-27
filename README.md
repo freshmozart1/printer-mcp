@@ -51,8 +51,32 @@ tools for the OCR helper.
 
 ```bash
 npm start            # stdio — for a client on this Mac
-npm run start:http   # HTTP on 0.0.0.0:8765 — reachable from the LAN
+npm run start:http   # HTTPS on 0.0.0.0:8765 — reachable from the LAN
 ```
+
+### HTTPS
+
+The network transport serves HTTPS as soon as a certificate exists. Generate one with:
+
+```bash
+npm run cert
+```
+
+This creates a small local certificate authority and issues a leaf certificate
+covering `localhost`, this Mac's LAN address and its hostnames. Trusting the CA is a
+one-off; when your IP changes, re-run `npm run cert` to reissue the leaf and the CA
+stays trusted.
+
+To make this Mac trust it (asks for your password, since it changes system trust
+settings — run it yourself):
+
+```bash
+sudo security add-trusted-cert -d -r trustRoot -k /Library/Keychains/System.keychain ~/.config/printer-mcp/ca-cert.pem
+```
+
+Without a certificate the server falls back to plain HTTP and warns at startup. That
+is worth avoiding: over HTTP the bearer token and every scanned page cross the WLAN in
+clear text. Set `PRINTER_MCP_TLS=0` to force it off deliberately.
 
 To run permanently in the background, starting at login and restarting on crash:
 
@@ -71,11 +95,13 @@ Logs go to `~/Library/Logs/printer-mcp.log`. Remove it with
 
 Over stdio, point the client at `node /path/to/printer-mcp/src/index.ts`.
 
-Over the network, the endpoint is `http://<this-mac>:8765/mcp` and every request needs
+Over the network, the endpoint is `https://<this-mac>:8765/mcp` and every request needs
 the bearer token printed at startup (also in `~/.config/printer-mcp/token`):
 
 ```bash
-curl -H "Authorization: Bearer $(cat ~/.config/printer-mcp/token)" http://192.168.1.10:8765/mcp
+curl --cacert ~/.config/printer-mcp/ca-cert.pem \
+  -H "Authorization: Bearer $(cat ~/.config/printer-mcp/token)" \
+  https://192.168.1.10:8765/mcp
 ```
 
 ## Security
@@ -83,7 +109,11 @@ curl -H "Authorization: Bearer $(cat ~/.config/printer-mcp/token)" http://192.16
 The server drives hardware and reads files, and it listens on the LAN, so:
 
 - **Bearer token** required on every MCP request; generated on first run.
+- **HTTPS** — enabled once `npm run cert` has run, so the token and scans are not
+  sent in clear over the WLAN.
 - **DNS-rebinding protection** — requests with a foreign `Host` header are rejected.
+  Allowed hostnames are lowercased, because the validator compares case-sensitively
+  against an already-lowercased header and a mixed-case entry would never match.
 - **Path allowlist** — `print_file` only reads from `~/Documents`, `~/Downloads`,
   `~/Desktop` and the scan folder. Paths are resolved through `realpath` first, so
   `..` and symlinks cannot escape.
@@ -107,6 +137,9 @@ All optional; sensible defaults are used.
 | `PRINTER_MCP_TOKEN` | generated and stored on first run |
 | `PRINTER_MCP_OCR_LANGUAGES` | `de-DE,en-US` |
 | `PRINTER_MCP_OCR_DPI` | `200` |
+| `PRINTER_MCP_TLS` | on when a certificate exists; `0` forces plain HTTP |
+| `PRINTER_MCP_TLS_KEY` / `PRINTER_MCP_TLS_CERT` | `~/.config/printer-mcp/{key,cert}.pem` |
+| `PRINTER_MCP_ALLOWED_HOSTS` | extra hostnames accepted in the `Host` header |
 
 ## Verifying against the real printer
 

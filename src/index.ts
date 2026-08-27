@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 import { randomUUID, timingSafeEqual } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { createServer as createHttpsServer } from "node:https";
 import express from "express";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
@@ -8,6 +10,7 @@ import { createServer } from "./server.ts";
 import { ensureScanDir, loadConfig } from "./config.ts";
 import { filesRouter } from "./http/files.ts";
 import { lanAddress } from "./files.ts";
+import { defaultAllowedHosts } from "./hosts.ts";
 import type { Config } from "./config.ts";
 
 function constantTimeEquals(a: string, b: string): boolean {
@@ -48,11 +51,11 @@ async function runHttp(config: Config): Promise<void> {
   const app = express();
 
   // DNS-rebinding protection: only accept requests addressed to this machine.
-  const allowedHosts = [
-    "localhost", "127.0.0.1", "[::1]",
+  const allowedHosts = defaultAllowedHosts(
     lanAddress(),
-    ...(process.env.PRINTER_MCP_ALLOWED_HOSTS?.split(",").map((h) => h.trim()).filter(Boolean) ?? []),
-  ];
+    process.env.PRINTER_MCP_ALLOWED_HOSTS?.split(",").map((h) => h.trim()).filter(Boolean),
+  );
+
   app.use(hostHeaderValidation(allowedHosts));
 
   // Liveness check, deliberately unauthenticated: it reveals only that the process is
@@ -88,15 +91,28 @@ async function runHttp(config: Config): Promise<void> {
     await transport.handleRequest(req, res, req.body);
   });
 
+  // Serve HTTPS when a certificate is available: without it the bearer token and
+  // every scanned page cross the WLAN in clear text.
+  const scheme = config.tls ? "https" : "http";
   await new Promise<void>((resolve) => {
-    app.listen(config.port, config.bindHost, () => resolve());
+    if (config.tls) {
+      createHttpsServer(
+        { key: readFileSync(config.tls.key), cert: readFileSync(config.tls.cert) },
+        app,
+      ).listen(config.port, config.bindHost, () => resolve());
+    } else {
+      app.listen(config.port, config.bindHost, () => resolve());
+    }
   });
 
   const address = lanAddress();
-  console.error(`printer-mcp listening on http://${config.bindHost}:${config.port}`);
-  console.error(`  MCP endpoint:  http://${address}:${config.port}/mcp`);
+  console.error(`printer-mcp listening on ${scheme}://${config.bindHost}:${config.port}`);
+  console.error(`  MCP endpoint:  ${scheme}://${address}:${config.port}/mcp`);
   console.error(`  Bearer token:  ${config.token}`);
   console.error(`  Scans saved to ${config.scanDir}`);
+  if (!config.tls) {
+    console.error("  WARNING: serving plain HTTP — run scripts/generate-cert.sh for TLS");
+  }
 }
 
 const config = loadConfig();

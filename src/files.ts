@@ -50,10 +50,10 @@ export function lanAddress(): string {
 
 export function downloadUrl(
   name: string,
-  opts: { host: string; port: number; token: string },
+  opts: { host: string; port: number; token: string; scheme?: "http" | "https" },
 ): string {
-  return `http://${opts.host}:${opts.port}/files/${encodeURIComponent(name)}` +
-    `?sig=${signName(name, opts.token)}`;
+  return `${opts.scheme ?? "http"}://${opts.host}:${opts.port}` +
+    `/files/${encodeURIComponent(name)}?sig=${signName(name, opts.token)}`;
 }
 
 export async function saveScan(dir: string, name: string, data: Buffer): Promise<string> {

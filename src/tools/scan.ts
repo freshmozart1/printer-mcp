@@ -106,7 +106,10 @@ export function registerScanTools(server: McpServer, config: Config): void {
 
       const urls = saved.map((f) =>
         downloadUrl(path.basename(f), {
-          host: lanAddress(), port: config.port, token: config.token,
+          host: lanAddress(),
+          port: config.port,
+          token: config.token,
+          scheme: config.tls ? "https" : "http",
         }));
 
       const lines = [
