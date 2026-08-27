@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple Computer//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+<key>ipptoolVersion</key>
+<string>CUPS v2.3.4</string>
+<key>Transfer</key>
+<string>auto</string>
+<key>Tests</key>
+<array>
+<dict>
+<key>Name</key>
+<string>test/fixtures/status</string>
+<key>Version</key>
+<string>1.1</string>
+<key>Operation</key>
+<string>Get-Printer-Attributes</string>
+<key>RequestId</key>
+<integer>118918</integer>
+<key>RequestAttributes</key>
+<array>
+<dict>
+<key>attributes-charset</key>
+<string>utf-8</string>
+<key>attributes-natural-language</key>
+<string>en</string>
+<key>printer-uri</key>
+<string>ipps://192.168.1.50:631/ipp/print</string>
+<key>requested-attributes</key>
+<array>
+<string>printer-state</string>
+<string>printer-state-reasons</string>
+<string>printer-state-message</string>
+<string>printer-make-and-model</string>
+<string>printer-info</string>
+<string>marker-names</string>
+<string>marker-levels</string>
+<string>marker-colors</string>
+<string>marker-types</string>
+<string>media-ready</string>
+<string>media-default</string>
+<string>sides-supported</string>
+<string>print-color-mode-supported</string>
+<string>print-quality-supported</string>
+<string>copies-supported</string>
+</array>
+</dict>
+</array>
+<key>Successful</key>
+<true />
+<key>StatusCode</key>
+<string>successful-ok</string>
+<key>ResponseAttributes</key>
+<array>
+<dict>
+<key>attributes-charset</key>
+<string>utf-8</string>
+<key>attributes-natural-language</key>
+<string>en</string>
+</dict>
+<dict>
+<key>printer-info</key>
+<string>HP OfficeJet Pro 9010 series [EXAMPLE]</string>
+<key>printer-make-and-model</key>
+<string>HP OfficeJet Pro 9010 series</string>
+<key>printer-state</key>
+<integer>3</integer>
+<key>printer-state-reasons</key>
+<string>none</string>
+<key>printer-state-message</key>
+<string></string>
+<key>media-default</key>
+<string>iso_a4_210x297mm</string>
+<key>media-ready</key>
+<string>iso_a4_210x297mm</string>
+<key>marker-names</key>
+<array>
+<string>cyan cartridge</string>
+<string>magenta cartridge</string>
+<string>yellow cartridge</string>
+<string>black cartridge</string>
+</array>
+<key>marker-colors</key>
+<array>
+<string>#00FFFF</string>
+<string>#FF00FF</string>
+<string>#FFFF00</string>
+<string>#000000</string>
+</array>
+<key>marker-types</key>
+<array>
+<string>ink-cartridge</string>
+<string>ink-cartridge</string>
+<string>ink-cartridge</string>
+<string>ink-cartridge</string>
+</array>
+<key>marker-levels</key>
+<array>
+<integer>50</integer>
+<integer>30</integer>
+<integer>30</integer>
+<integer>50</integer>
+</array>
+<key>copies-supported</key>
+<dict><key>lower</key><integer>1</integer><key>upper</key><integer>99</integer></dict>
+<key>print-quality-supported</key>
+<array>
+<integer>3</integer>
+<integer>4</integer>
+<integer>5</integer>
+</array>
+<key>sides-supported</key>
+<array>
+<string>one-sided</string>
+<string>two-sided-short-edge</string>
+<string>two-sided-long-edge</string>
+</array>
+<key>print-color-mode-supported</key>
+<array>
+<string>auto</string>
+<string>auto-monochrome</string>
+<string>monochrome</string>
+<string>color</string>
+<string>process-monochrome</string>
+</array>
+</dict>
+</array>
+</dict>
+</array>
+<key>Successful</key>
+<true />
+</dict>
+</plist>
