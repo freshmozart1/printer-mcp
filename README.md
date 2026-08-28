@@ -158,7 +158,25 @@ not evidence of a firewall.
 
 ## Configuration
 
-All optional; sensible defaults are used.
+Settings can go in `~/.config/printer-mcp/env` as `KEY=VALUE` lines. Every launch
+context reads it — the LaunchAgent, Claude Code and the desktop app — so there is one
+source of truth rather than three that drift apart. A real environment variable
+overrides the file.
+
+```bash
+# ~/.config/printer-mcp/env
+PRINTER_MCP_PRINTER_HOST=192.168.1.50
+```
+
+Pinning the printer to its IPv4 address is worth doing. The mDNS name also resolves to
+three IPv6 addresses which Node tries first; those attempts have to fail before it
+falls back to IPv4, which measured 2963 ms against 398 ms for the pinned address. If
+you pin the address, give the printer a fixed DHCP lease so it cannot move.
+
+The file is only read at startup, so **restart the server after changing it** — for
+Claude Code and the desktop app that means restarting the app.
+
+All settings are optional; sensible defaults are used.
 
 | Variable | Default |
 |---|---|

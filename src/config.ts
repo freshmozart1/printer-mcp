@@ -25,7 +25,38 @@ export interface Config {
 
 const CONFIG_DIR = path.join(homedir(), ".config", "printer-mcp");
 const TOKEN_FILE = path.join(CONFIG_DIR, "token");
+const ENV_FILE = path.join(CONFIG_DIR, "env");
 const TLS_KEY = path.join(CONFIG_DIR, "key.pem");
+
+/**
+ * Read `~/.config/printer-mcp/env` as KEY=VALUE defaults.
+ *
+ * The server is launched from several places — a LaunchAgent, Claude Code, the
+ * desktop app — each with its own way of setting environment variables. A single
+ * file keeps one source of truth instead of three that drift apart. Real environment
+ * variables still win, so a one-off override works as expected.
+ */
+export function loadEnvFile(file: string = ENV_FILE): Record<string, string> {
+  if (!existsSync(file)) return {};
+  const out: Record<string, string> = {};
+  for (const raw of readFileSync(file, "utf8").split("\n")) {
+    const line = raw.trim();
+    if (!line || line.startsWith("#")) continue;
+    const eq = line.indexOf("=");
+    if (eq <= 0) continue;
+    const key = line.slice(0, eq).trim();
+    let value = line.slice(eq + 1).trim();
+    // Allow quoting so values with spaces survive.
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    if (key) out[key] = value;
+  }
+  return out;
+}
 const TLS_CERT = path.join(CONFIG_DIR, "cert.pem");
 
 /**
@@ -107,7 +138,9 @@ function list(value: string | undefined, fallback: string[]): string[] {
   return value.split(",").map((s) => s.trim()).filter(Boolean);
 }
 
-export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
+export function loadConfig(processEnv: NodeJS.ProcessEnv = process.env): Config {
+  // File values are defaults; a real environment variable overrides them.
+  const env: NodeJS.ProcessEnv = { ...loadEnvFile(), ...processEnv };
   const home = homedir();
   const scanDir = expandHome(env.PRINTER_MCP_SCAN_DIR ?? path.join(home, "Documents", "Scans"));
 
