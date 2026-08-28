@@ -158,20 +158,27 @@ them apart before changing anything:
 node -e "const s=require('node:net').connect({host:'192.168.1.50',port:443,timeout:5000});s.on('connect',()=>{console.log('CONNECTED');s.destroy()});s.on('error',e=>console.log(e.code));s.on('timeout',()=>{console.log('timeout');s.destroy()})"
 ```
 
-Compare it against `curl`, which is Apple-signed and carries its own permissions:
+Then run this **in a terminal**, which matters: a terminal holds its own Local Network
+permission, while anything the server launches inherits the server's restrictions.
 
 ```bash
 curl -sk -m 5 -o /dev/null -w "%{http_code}\n" https://192.168.1.50/eSCL/ScannerStatus
 ```
 
-| What you see | Cause | Status |
-|---|---|---|
-| Fails once, then `CONNECTED` | The printer is asleep | Handled automatically |
-| Fails every time, but `curl` returns 200 | This process may not use the local network | Handled automatically |
-| Both fail | Printer off, or the address moved | Needs your attention |
+| Node says | Terminal curl says | Cause | Status |
+|---|---|---|---|
+| Fails once, then `CONNECTED` | — | The printer is asleep | Handled automatically |
+| Fails every time | `200` | This process may not use the local network | **Grant it — see below** |
+| Fails every time | anything else | Printer off, or the address moved | Needs your attention |
 
-`get_device_status` performs the same comparison itself and reports which case it is,
-so you rarely need to run these by hand.
+The middle row is the common one when the server is launched by an application rather
+than from a terminal, and it is the case the tool cannot diagnose alone: `curl` run
+*by* the server is blocked alongside it, so only a terminal gives an independent
+answer.
+
+`get_device_status` runs the same check itself and reports what it can. It cannot
+settle the middle two rows on its own, for the reason above, so it says which it
+cannot distinguish rather than guessing.
 
 ### The printer is asleep
 
@@ -188,32 +195,52 @@ immediately.
 
 ### This process may not use the local network
 
-Status has a second route for the same reason. `ipptool` is a separate process and
-cannot use the curl fallback, so where raw sockets are denied it fails even though
-HTTP to the printer still works. When it does, the status query falls back to HP's own
-`/DevMgmt/*.xml` endpoints over the shared transport, which reports state and ink
-levels but not the loaded paper size.
+On macOS 15 and later a program must hold **Local Network** access before it can reach
+devices on your network. Without it every connection fails with `EHOSTUNREACH`, which
+is indistinguishable from a printer that is switched off.
 
+**Grant it to `node`, not to the application, and check the entry is switched on.**
 
-On macOS 15 and later an application must hold **Local Network** access before it can
-reach devices on your network. A process that lacks it gets `EHOSTUNREACH` — the same
-error as a printer that is switched off.
+> System Settings > Privacy & Security > **Local Network**
 
-Granting the *app* is often not enough. Claude launches MCP servers through a wrapper
-that sets the macOS *disclaim* attribute, which makes the server responsible for its
-own privacy permissions rather than inheriting the app's. A bare `node` binary holds no
-such grant, so the server is blocked even when Claude itself is allowed. Running the
-same code from a terminal works, because it inherits the terminal's permission.
+Claude launches MCP servers through a wrapper that sets the macOS *disclaim*
+attribute, which makes the server responsible for its own privacy permissions instead
+of inheriting the launching app's. Granting Claude therefore does nothing for the
+server: the grant has to be on the `node` binary that actually runs it. Running the
+same code from a terminal works, because that inherits the terminal's permission.
 
-The scanner transport handles this without configuration: it prefers Node's sockets
-and switches to `curl` the first time a request is refused by policy, remembering the
-choice so the cost is paid once. A full scan measured 4.85 s through curl against
-5.2 s natively, so there is no meaningful penalty. Override with
-`PRINTER_MCP_SCAN_TRANSPORT`: `auto` (default), `node`, or `curl`.
+Two details cost hours of debugging here, so they are worth stating plainly:
 
-An outbound firewall such as LuLu or Little Snitch blocks sockets the same way. If the
-fallback is active and you would rather it were not, look for a rule covering the node
-binary.
+- **The `node` entry can already exist while being switched off.** An absent entry and
+  a disabled one produce exactly the same failure, so check the toggle rather than
+  only looking for the row.
+- **The restriction applies to child processes too.** `curl`, `ipptool` and anything
+  else the server runs are blocked alongside it, so a subprocess succeeding elsewhere
+  on the machine says nothing about whether the server can reach the printer.
+
+The permission takes effect immediately; nothing needs restarting.
+
+#### What the server does about it
+
+Two fallbacks keep things working where only *some* routes are blocked:
+
+- **Scanning** prefers Node's sockets and switches to `curl` the first time a request
+  is refused by policy. A full scan measured 4.85 s that way against 5.2 s natively.
+  It retries sockets every few minutes, so granting the permission restores the direct
+  path on its own rather than waiting for a restart.
+- **Status** normally uses `ipptool`, which is a separate process and cannot use that
+  fallback. When it fails, the status query falls back to HP's own `/DevMgmt/*.xml`
+  endpoints over the same transport. That path reports state and ink levels but not
+  the loaded paper size.
+
+Force one route with `PRINTER_MCP_SCAN_TRANSPORT`: `auto` (default), `node`, or
+`curl`.
+
+Neither fallback helps when the process is denied the network outright, since they are
+subject to the same restriction. That case needs the permission above.
+
+An outbound firewall such as LuLu or Little Snitch produces the same symptom. If you
+suspect one, look for a rule covering the `node` binary.
 
 ### The printer is off, or its address changed
 
