@@ -134,6 +134,23 @@ The server drives hardware and reads files, and it listens on the LAN, so:
   handing over the token.
 - `/health` is intentionally unauthenticated and returns only `{"ok":true}`.
 
+## "Scanner: unreachable" on macOS
+
+On macOS 15 and later an application must be granted **Local Network** access before
+it, or any process it launches, can reach devices on your network. Until then the
+connection fails with `EHOSTUNREACH`, which is indistinguishable from the printer
+being switched off.
+
+This bites the desktop app in particular: the server runs fine from a terminal, where
+the terminal already holds the permission, and fails when the same server is launched
+by another app that does not. Grant it under **System Settings > Privacy & Security >
+Local Network**, then restart that app.
+
+`get_device_status` works this out for itself. It checks whether another program on
+the machine can reach the printer, and says whether the device is absent or this
+process is being blocked. An outbound firewall such as LuLu or Little Snitch produces
+the same symptom and is reported alongside.
+
 ## The printer sleeps
 
 An idle OfficeJet drops off the network. Its ARP entry expires, and the next

@@ -3,6 +3,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { listDestinations, listJobs } from "../printer/cups.ts";
 import { queryPrinterStatus } from "../printer/ipp.ts";
 import { getScannerStatus } from "../scanner/escl.ts";
+import { diagnoseUnreachable } from "../scanner/diagnose.ts";
 import type { Config } from "../config.ts";
 
 function inkBar(percent: number): string {
@@ -57,7 +58,12 @@ export function registerStatusTools(server: McpServer, config: Config): void {
 
       lines.push("");
       if (scanner instanceof Error) {
-        lines.push(`Scanner: unreachable (${scanner.message})`);
+        const detail = scanner.message || (scanner as { code?: string }).code || "no details";
+        lines.push(`Scanner: unreachable (${detail})`);
+        // A bare connection error says nothing about the cause; work out whether the
+        // printer is absent or this process is being denied the local network.
+        const { hint } = await diagnoseUnreachable(config.printerHost);
+        lines.push(...hint.split("\n").map((l) => `  ${l}`));
       } else {
         lines.push(`Scanner: ${scanner.state}`);
         lines.push(
