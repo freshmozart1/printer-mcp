@@ -20,9 +20,27 @@ fi
 
 # launchd runs with a minimal PATH, so node must be referenced absolutely. nvm-managed
 # installs move when Node is upgraded — re-run this script after upgrading Node.
-NODE_BIN="$(command -v node)"
+# Pick a node new enough to run TypeScript directly. `command -v node` is not
+# sufficient: with nvm installed the shell default may be an older version that
+# cannot strip types, and the agent would fail at launch with an opaque ESM error.
+find_node() {
+  local candidate
+  for candidate in "$(command -v node || true)" "$HOME"/.nvm/versions/node/*/bin/node; do
+    [[ -x "$candidate" ]] || continue
+    local major
+    major="$("$candidate" -p 'process.versions.node.split(".")[0]' 2>/dev/null || echo 0)"
+    if (( major >= 24 )); then
+      echo "$candidate"
+      return 0
+    fi
+  done
+  return 1
+}
+
+NODE_BIN="$(find_node || true)"
 if [[ -z "$NODE_BIN" ]]; then
-  echo "node not found on PATH" >&2
+  echo "No Node 24+ found. This server runs TypeScript directly and needs Node 24 or newer." >&2
+  echo "Checked PATH and ~/.nvm/versions/node/*." >&2
   exit 1
 fi
 

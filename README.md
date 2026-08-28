@@ -44,8 +44,20 @@ npm install          # also compiles the native OCR helper
 npm test
 ```
 
-Requires Node 24+ (TypeScript runs natively, no build step) and Xcode command line
-tools for the OCR helper.
+Requires **Node 24+** — TypeScript runs natively, with no build step — and Xcode
+command line tools for the OCR helper. The version is pinned in `.nvmrc`, so with nvm
+installed:
+
+```bash
+nvm use
+```
+
+This matters more than it looks. Under an older Node the failure is
+`ERR_UNKNOWN_FILE_EXTENSION` from the module loader, which says nothing about the
+version being wrong, so `npm start` and `npm test` refuse to run and say so instead.
+The LaunchAgent and any MCP client entry should point at an **absolute** path to a
+Node 24+ binary rather than bare `node`, which resolves to whatever nvm currently
+defaults to.
 
 ### Running
 

@@ -17,7 +17,9 @@
     "typecheck": "tsc --noEmit",
     "build:ocr": "swiftc -O -parse-as-library native/ocr.swift -o native/ocr",
     "postinstall": "npm run build:ocr",
-    "cert": "./scripts/generate-cert.sh"
+    "cert": "./scripts/generate-cert.sh",
+    "prestart": "node scripts/require-node.mjs",
+    "pretest": "node scripts/require-node.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
