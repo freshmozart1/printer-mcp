@@ -18,8 +18,8 @@
     "start:http": "node src/index.ts --http",
     "test": "node --test test/*.test.ts",
     "typecheck": "tsc --noEmit",
-    "build:ocr": "swiftc -O -parse-as-library native/ocr.swift -o native/ocr",
-    "postinstall": "npm run build:ocr",
+    "build:ocr": "./scripts/build-ocr.sh",
+    "postinstall": "./scripts/build-ocr.sh --optional",
     "cert": "./scripts/generate-cert.sh",
     "prestart": "node scripts/require-node.mjs",
     "pretest": "node scripts/require-node.mjs"

@@ -40,9 +40,15 @@ transcription of anything critical.
 ## Setup
 
 ```bash
-npm install          # also compiles the native OCR helper
+npm install          # also compiles the native OCR helper, if it can
 npm test
 ```
+
+OCR is optional. If the Xcode command line tools are absent the helper is not built,
+`npm install` warns and carries on, and everything except `scan_document`'s `ocr`
+option works normally — a scan still runs and still saves its file, it just comes back
+without text. Build it later with `npm run build:ocr`, which unlike installation does
+fail if it cannot.
 
 **macOS only.** `package.json` declares `"os": ["darwin"]`, so `npm install` refuses
 to run elsewhere with `EBADPLATFORM` rather than failing later with a confusing
