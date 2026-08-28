@@ -44,6 +44,14 @@ npm install          # also compiles the native OCR helper
 npm test
 ```
 
+**macOS only.** `package.json` declares `"os": ["darwin"]`, so `npm install` refuses
+to run elsewhere with `EBADPLATFORM` rather than failing later with a confusing
+compiler error. Printing and scanning themselves are portable — CUPS exists on Linux
+and eSCL is plain HTTPS — but four macOS tools are used: `plutil` to parse `ipptool`
+output (the one hard dependency, without which device status fails), Swift/Vision for
+OCR, `sips` for scan previews, and `scutil` for the mDNS hostname. The last three
+degrade quietly rather than breaking.
+
 Requires **Node 24+** — TypeScript runs natively, with no build step — and Xcode
 command line tools for the OCR helper. The version is pinned in `.nvmrc`, so with nvm
 installed:
