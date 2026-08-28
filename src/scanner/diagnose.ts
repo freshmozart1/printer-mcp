@@ -60,11 +60,21 @@ export async function diagnoseUnreachable(
   }
 
   return {
-    kind: "host-unreachable",
+    kind: "unknown",
     hint:
-      `Nothing on this Mac can reach the printer at ${host}. Check that it is switched ` +
-      "on and connected to the same network, and that its address is still correct — " +
-      "a DHCP lease may have moved it. Set PRINTER_MCP_PRINTER_HOST in " +
-      "~/.config/printer-mcp/env if the address has changed.",
+      `This process could not reach the printer at ${host} by any route: neither its ` +
+      "own sockets nor curl.\n" +
+      "That has two possible causes and they cannot be told apart from in here, " +
+      "because curl is subject to the same restrictions as everything else this " +
+      "process runs.\n" +
+      "Run this in a terminal to find out which:\n" +
+      `  curl -sk -m 5 -o /dev/null -w "%{http_code}\\n" https://${host}/eSCL/ScannerStatus\n` +
+      "  200 means the printer is fine and this process is being denied the local " +
+      "network. On macOS 15+ grant Local Network access to the program that launched " +
+      "this server; note that a launcher which disclaims its children needs the grant " +
+      "on the child, so look for a `node` entry rather than the app. An outbound " +
+      "firewall such as LuLu can block it the same way.\n" +
+      "  Anything else means the printer is off, on another network, or has moved to " +
+      "a new address — set PRINTER_MCP_PRINTER_HOST in ~/.config/printer-mcp/env.",
   };
 }
