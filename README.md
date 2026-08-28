@@ -214,6 +214,18 @@ printer a fixed lease so it cannot move again.
 
 ## Configuration
 
+**Set these two before first use.** The values shipped in the source are placeholders,
+not a real device:
+
+```bash
+# ~/.config/printer-mcp/env
+PRINTER_MCP_PRINTER_HOST=192.168.1.50                      # your printer's address
+PRINTER_MCP_CUPS_DEST=HP_OfficeJet_Pro_9010_series__ABC123_  # from `lpstat -p`
+```
+
+Find them with `lpstat -p` for the queue name, and your router or the printer's own
+network menu for the address. Everything else has a working default.
+
 Settings can go in `~/.config/printer-mcp/env` as `KEY=VALUE` lines. Every launch
 context reads it — the LaunchAgent, Claude Code and the desktop app — so there is one
 source of truth rather than three that drift apart. A real environment variable
@@ -236,8 +248,8 @@ All settings are optional; sensible defaults are used.
 
 | Variable | Default |
 |---|---|
-| `PRINTER_MCP_PRINTER_HOST` | `HPEXAMPLE12345.local` (pin to the IPv4 address — see above) |
-| `PRINTER_MCP_CUPS_DEST` | `HP_OfficeJet_Pro_9010_series__EXAMPLE_` |
+| `PRINTER_MCP_PRINTER_HOST` | placeholder — **must be set**; prefer the IPv4 address |
+| `PRINTER_MCP_CUPS_DEST` | placeholder — **must be set** (see `lpstat -p`) |
 | `PRINTER_MCP_SCAN_DIR` | `~/Documents/Scans` |
 | `PRINTER_MCP_ALLOWED_DIRS` | Documents, Downloads, Desktop, scan dir |
 | `PRINTER_MCP_PORT` | `8765` |

@@ -128,9 +128,19 @@ describe("createTransport", () => {
   });
 });
 
-describe("curlRequest against the real printer", () => {
+// Touches real hardware, so it runs only when a printer has actually been configured.
+// A fresh clone leaves the placeholder default in place and skips, which keeps
+// `npm test` free of any device dependency.
+const { loadConfig } = await import("../src/config.ts");
+const configuredHost = loadConfig().printerHost;
+const haveRealPrinter = !configuredHost.startsWith("HPEXAMPLE");
+
+describe("curlRequest against the real printer", {
+  skip: haveRealPrinter ? false : "no printer configured (set PRINTER_MCP_PRINTER_HOST)",
+}, () => {
   test("fetches scanner status", async () => {
-    const res = await curlRequest("https://192.168.1.50/eSCL/ScannerStatus", { timeoutMs: 10_000 });
+    const res = await curlRequest(`https://${configuredHost}/eSCL/ScannerStatus`,
+      { timeoutMs: 10_000 });
     assert.equal(res.status, 200);
     assert.match(res.body.toString("utf8"), /ScannerStatus/);
   });
