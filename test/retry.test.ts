@@ -1,6 +1,6 @@
 import { test, describe } from "node:test";
 import assert from "node:assert/strict";
-import { isTransientNetworkError, withRetry } from "../src/scanner/retry.ts";
+import { isTransientNetworkError, withRetry } from "../src/retry.ts";
 
 const err = (code: string) => Object.assign(new Error(code), { code });
 const noSleep = async () => {};
@@ -27,6 +27,30 @@ describe("isTransientNetworkError", () => {
     assert.equal(isTransientNetworkError(err("ENOENT")), false);
     assert.equal(isTransientNetworkError(undefined), false);
     assert.equal(isTransientNetworkError("EHOSTUNREACH"), false);
+  });
+});
+
+describe("isTransientNetworkError on subprocess failures", () => {
+  // ipptool exits non-zero with the reason only in its output; none of the error
+  // codes appear, so the text has to be recognised instead.
+  const execFailure = (stderr: string) =>
+    Object.assign(new Error(`Command failed: ipptool ...\n${stderr}`), { code: 1, stderr });
+
+  test("recognises a sleeping printer reported by ipptool", () => {
+    assert.equal(isTransientNetworkError(execFailure(
+      'ipptool: Unable to connect to "192.168.1.50" on port 631 - No route to host')), true);
+  });
+
+  test("recognises the other unreachable phrasings", () => {
+    for (const t of ["Host is down", "Network is unreachable", "Unable to connect to host"]) {
+      assert.equal(isTransientNetworkError(execFailure(t)), true, t);
+    }
+  });
+
+  test("does not retry a genuine IPP error", () => {
+    // A printer that answers with an error is not a transient condition.
+    assert.equal(isTransientNetworkError(execFailure("successful-ok not returned")), false);
+    assert.equal(isTransientNetworkError(execFailure("client-error-not-found")), false);
   });
 });
 

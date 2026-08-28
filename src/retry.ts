@@ -8,6 +8,15 @@
  * error that looks like a fault but is simply a sleeping device.
  */
 
+/**
+ * Text emitted by command line tools when they cannot reach the device.
+ *
+ * `ipptool` runs as a subprocess, so its failure arrives as a non-zero exit status
+ * with the reason only in its output — none of the error codes below appear.
+ */
+const TRANSIENT_OUTPUT =
+  /no route to host|unable to connect|host is down|network is unreachable/i;
+
 /** Connection-level failures, raised before any request data reaches the device. */
 const TRANSIENT = new Set([
   "EHOSTUNREACH", // no ARP entry — the classic sleeping-printer symptom
@@ -30,7 +39,13 @@ export function isTransientNetworkError(error: unknown): boolean {
   const nested = (error as { errors?: unknown }).errors;
   if (Array.isArray(nested)) return nested.some(isTransientNetworkError);
 
-  return false;
+  // A failed subprocess carries its reason as text rather than a code.
+  const text = [
+    (error as { stderr?: unknown }).stderr,
+    (error as { stdout?: unknown }).stdout,
+    (error as { message?: unknown }).message,
+  ].filter((v) => typeof v === "string").join("\n");
+  return TRANSIENT_OUTPUT.test(text);
 }
 
 export interface RetryOptions {

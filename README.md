@@ -179,8 +179,10 @@ An idle OfficeJet drops off the network. Its ARP entry expires, and the next
 connection fails instantly because the kernel cannot resolve the device's MAC address.
 The failed attempt is itself what wakes the printer, so a moment later it answers.
 
-The scanner retries connection-level failures three times, backing off 400 ms then
-1200 ms. Only failures raised *before* the request reaches the printer are retried, so
+Both the scanner and the status query retry three times, backing off 400 ms then
+1200 ms. The two fail differently and both have to be recognised: the scanner gets an
+`EHOSTUNREACH` error code, while `ipptool` runs as a subprocess and reports
+"No route to host" only in its output. Only failures raised *before* the request reaches the printer are retried, so
 a scan job is never submitted twice; an error the printer actually returns fails
 immediately.
 

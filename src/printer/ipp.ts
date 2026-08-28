@@ -2,6 +2,7 @@ import { execFile, spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { promisify } from "node:util";
+import { withRetry } from "../retry.ts";
 
 const run = promisify(execFile);
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -91,13 +92,20 @@ export function toPrinterStatus(attrs: Record<string, unknown>): PrinterStatus {
   };
 }
 
-/** Query the printer over IPP and return its status. */
+/**
+ * Query the printer over IPP and return its status.
+ *
+ * Retried like the scanner: an idle printer drops off the network, and the first
+ * attempt after that fails while itself waking the device. `ipptool` reports this as
+ * "No route to host" rather than as an error code.
+ */
 export async function queryPrinterStatus(printerHost: string): Promise<PrinterStatus> {
   const uri = `ipps://${printerHost}:631/ipp/print`;
-  const { stdout: plist } = await run("ipptool", ["-X", uri, ATTRIBUTES_REQUEST], {
-    timeout: 15_000,
-    maxBuffer: 8 * 1024 * 1024,
-  });
+  const { stdout: plist } = await withRetry(() =>
+    run("ipptool", ["-X", uri, ATTRIBUTES_REQUEST], {
+      timeout: 15_000,
+      maxBuffer: 8 * 1024 * 1024,
+    }));
   // Let macOS parse its own plist format rather than hand-rolling a parser.
   const json = await plutilToJson(plist);
   return toPrinterStatus(mergeResponseAttributes(json));

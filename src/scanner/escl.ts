@@ -1,5 +1,5 @@
 import { setTimeout as delay } from "node:timers/promises";
-import { withRetry } from "./retry.ts";
+import { withRetry } from "../retry.ts";
 import { createTransport } from "./transport.ts";
 import type { HttpResult, TransportMode } from "./transport.ts";
 
