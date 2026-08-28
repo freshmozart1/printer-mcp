@@ -134,6 +134,28 @@ The server drives hardware and reads files, and it listens on the LAN, so:
   handing over the token.
 - `/health` is intentionally unauthenticated and returns only `{"ok":true}`.
 
+## The printer sleeps
+
+An idle OfficeJet drops off the network. Its ARP entry expires, and the next
+connection fails instantly with `EHOSTUNREACH` — the kernel cannot resolve the
+device's MAC address. The failed attempt is itself what wakes the printer, so a
+moment later it answers normally.
+
+The scanner client therefore retries connection-level failures (three attempts,
+400 ms then 1200 ms). Only failures raised *before* the request reaches the printer
+are retried, so a scan job is never submitted twice. Errors the printer actually
+returns fail immediately rather than being retried.
+
+If you want to see the raw behaviour:
+
+```bash
+node -e "const s=require('node:net').connect({host:'192.168.1.50',port:443,timeout:5000});s.on('connect',()=>{console.log('CONNECTED');s.destroy()});s.on('error',e=>console.log(e.code));s.on('timeout',()=>{console.log('timeout');s.destroy()})"
+```
+
+Run against a sleeping printer this prints `EHOSTUNREACH` once and `CONNECTED`
+afterwards. `curl` succeeding while Node reports `EHOSTUNREACH` is the same symptom,
+not evidence of a firewall.
+
 ## Configuration
 
 All optional; sensible defaults are used.

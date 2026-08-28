@@ -1,5 +1,6 @@
 import { Agent, request } from "node:https";
 import { setTimeout as delay } from "node:timers/promises";
+import { withRetry } from "./retry.ts";
 
 export type ScanSource = "adf" | "adf-duplex" | "flatbed";
 export type ScanColorMode = "color" | "grayscale" | "blackandwhite";
@@ -149,7 +150,19 @@ interface HttpResult {
   body: Buffer;
 }
 
+/**
+ * Perform one HTTP request, retrying connection-level failures.
+ *
+ * The printer sleeps when idle; the first attempt after that wakes it.
+ */
 function httpRequest(
+  url: string,
+  options: { method?: string; body?: string; timeoutMs?: number } = {},
+): Promise<HttpResult> {
+  return withRetry(() => httpRequestOnce(url, options));
+}
+
+function httpRequestOnce(
   url: string,
   options: { method?: string; body?: string; timeoutMs?: number } = {},
 ): Promise<HttpResult> {
