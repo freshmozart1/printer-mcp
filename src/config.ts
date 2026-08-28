@@ -26,6 +26,16 @@ export interface Config {
 const CONFIG_DIR = path.join(homedir(), ".config", "printer-mcp");
 const TOKEN_FILE = path.join(CONFIG_DIR, "token");
 const ENV_FILE = path.join(CONFIG_DIR, "env");
+
+/**
+ * Defaults that name no real device.
+ *
+ * The project ships placeholders rather than one household's printer, so an
+ * unconfigured install can be recognised and reported as such instead of looking like
+ * a printer that is switched off.
+ */
+export const PLACEHOLDER_PRINTER_HOST = "HPEXAMPLE12345.local";
+export const PLACEHOLDER_CUPS_DEST = "HP_OfficeJet_Pro_9010_series__EXAMPLE_";
 const TLS_KEY = path.join(CONFIG_DIR, "key.pem");
 
 /**
@@ -145,8 +155,8 @@ export function loadConfig(processEnv: NodeJS.ProcessEnv = process.env): Config 
   const scanDir = expandHome(env.PRINTER_MCP_SCAN_DIR ?? path.join(home, "Documents", "Scans"));
 
   return {
-    printerHost: env.PRINTER_MCP_PRINTER_HOST ?? "HPEXAMPLE12345.local",
-    cupsDestination: env.PRINTER_MCP_CUPS_DEST ?? "HP_OfficeJet_Pro_9010_series__EXAMPLE_",
+    printerHost: env.PRINTER_MCP_PRINTER_HOST ?? PLACEHOLDER_PRINTER_HOST,
+    cupsDestination: env.PRINTER_MCP_CUPS_DEST ?? PLACEHOLDER_CUPS_DEST,
     scanDir,
     allowedPrintDirs: list(env.PRINTER_MCP_ALLOWED_DIRS, [
       path.join(home, "Documents"),
@@ -166,4 +176,37 @@ export function loadConfig(processEnv: NodeJS.ProcessEnv = process.env): Config 
 /** Ensure the scan output directory exists. */
 export function ensureScanDir(config: Config): void {
   mkdirSync(config.scanDir, { recursive: true });
+}
+
+/** Settings still left at their placeholder, i.e. never configured. */
+export function missingConfiguration(config: Config): string[] {
+  const missing: string[] = [];
+  if (config.printerHost === PLACEHOLDER_PRINTER_HOST) missing.push("PRINTER_MCP_PRINTER_HOST");
+  if (config.cupsDestination === PLACEHOLDER_CUPS_DEST) missing.push("PRINTER_MCP_CUPS_DEST");
+  return missing;
+}
+
+/** A setup message naming exactly what to set and where. */
+export function setupInstructions(missing: string[]): string {
+  return [
+    `This server has not been pointed at a printer yet: ${missing.join(" and ")} ` +
+      `${missing.length > 1 ? "are" : "is"} still at the shipped placeholder.`,
+    "",
+    `Create ${path.join("~", ".config", "printer-mcp", "env")} with:`,
+    ...(missing.includes("PRINTER_MCP_PRINTER_HOST")
+      ? ["  PRINTER_MCP_PRINTER_HOST=192.168.1.50        # the printer's address"]
+      : []),
+    ...(missing.includes("PRINTER_MCP_CUPS_DEST")
+      ? ["  PRINTER_MCP_CUPS_DEST=Your_Queue_Name        # see `lpstat -p`"]
+      : []),
+    "",
+    "Then restart this server. Run `lpstat -p` for the queue name; the address comes " +
+      "from your router or the printer's own network menu.",
+  ].join("\n");
+}
+
+/** Throw a setup message when the server has never been pointed at a printer. */
+export function assertConfigured(config: Config): void {
+  const missing = missingConfiguration(config);
+  if (missing.length) throw new Error(setupInstructions(missing));
 }

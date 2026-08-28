@@ -9,6 +9,7 @@ import { printFile } from "../printer/cups.ts";
 import { ocrFile } from "../ocr/index.ts";
 import { downloadUrl, lanAddress, makePreview, safeBaseName, saveScan, timestamp } from "../files.ts";
 import { startProgress } from "../progress.ts";
+import { assertConfigured } from "../config.ts";
 import type { Config } from "../config.ts";
 
 const sourceSchema = z.enum(["adf", "adf-duplex", "flatbed"]);
@@ -71,6 +72,7 @@ export function registerScanTools(server: McpServer, config: Config): void {
       annotations: { readOnlyHint: false, openWorldHint: true },
     },
     async (args, extra) => {
+      assertConfigured(config);
       const source = args.source ?? "adf";
       const format = args.format ?? "pdf";
 
@@ -185,6 +187,7 @@ export function registerScanTools(server: McpServer, config: Config): void {
       annotations: { readOnlyHint: false, openWorldHint: true },
     },
     async (args, extra) => {
+      assertConfigured(config);
       const source = args.source ?? "adf";
       const colorMode = args.color ?? "color";
 

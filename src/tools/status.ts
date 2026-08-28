@@ -4,6 +4,7 @@ import { listDestinations, listJobs } from "../printer/cups.ts";
 import { queryPrinterStatus } from "../printer/ipp.ts";
 import { getScannerStatus, scanTransportInUse } from "../scanner/escl.ts";
 import { diagnoseUnreachable } from "../scanner/diagnose.ts";
+import { missingConfiguration, setupInstructions } from "../config.ts";
 import type { Config } from "../config.ts";
 
 function inkBar(percent: number): string {
@@ -26,6 +27,12 @@ export function registerStatusTools(server: McpServer, config: Config): void {
       annotations: { readOnlyHint: true, openWorldHint: true },
     },
     async () => {
+      // An unconfigured install must not be reported as a broken printer.
+      const missing = missingConfiguration(config);
+      if (missing.length) {
+        return { content: [{ type: "text", text: setupInstructions(missing) }] };
+      }
+
       const [printer, jobs, destinations, scanner] = await Promise.all([
         queryPrinterStatus(config.printerHost).catch((e: Error) => e),
         listJobs().catch(() => []),

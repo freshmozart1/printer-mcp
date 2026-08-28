@@ -6,7 +6,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { printFile } from "../printer/cups.ts";
 import type { PrintOptions } from "../printer/cups.ts";
 import { renderToPdf } from "../render/textToPdf.ts";
-import { resolveAllowedPath } from "../config.ts";
+import { assertConfigured, resolveAllowedPath } from "../config.ts";
 import type { Config } from "../config.ts";
 
 /** Print options shared by print_file and print_text. */
@@ -64,6 +64,7 @@ export function registerPrintTools(server: McpServer, config: Config): void {
       annotations: { readOnlyHint: false, openWorldHint: true },
     },
     async (args) => {
+      assertConfigured(config);
       const file = await resolveAllowedPath(args.path, config.allowedPrintDirs);
       const options: PrintOptions = {
         ...toPrintOptions(args),
@@ -102,6 +103,7 @@ export function registerPrintTools(server: McpServer, config: Config): void {
       annotations: { readOnlyHint: false, openWorldHint: true },
     },
     async (args) => {
+      assertConfigured(config);
       const pdf = await renderToPdf(args.content, {
         markdown: args.markdown ?? true,
         title: args.title,
