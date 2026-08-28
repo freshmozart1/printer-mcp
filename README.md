@@ -134,59 +134,69 @@ The server drives hardware and reads files, and it listens on the LAN, so:
   handing over the token.
 - `/health` is intentionally unauthenticated and returns only `{"ok":true}`.
 
-## "Scanner: unreachable" on macOS
+## When the scanner is unreachable
 
-On macOS 15 and later an application must be granted **Local Network** access before
-it, or any process it launches, can reach devices on your network. Until then the
-connection fails with `EHOSTUNREACH`, which is indistinguishable from the printer
-being switched off.
-
-This bites the desktop app in particular: the server runs fine from a terminal, where
-the terminal already holds the permission, and fails when the same server is launched
-by another app that does not. Grant it under **System Settings > Privacy & Security >
-Local Network**, then restart that app.
-
-`get_device_status` works this out for itself. It checks whether another program on
-the machine can reach the printer, and says whether the device is absent or this
-process is being blocked. An outbound firewall such as LuLu or Little Snitch produces
-the same symptom and is reported alongside.
-
-## Scanning from an app that cannot use the local network
-
-Claude launches MCP servers through a wrapper that sets the macOS *disclaim*
-attribute, which makes the server responsible for its own privacy permissions instead
-of inheriting the app's. Granting Claude Local Network access therefore does not help
-the server: a bare `node` binary has no such grant of its own, and its sockets to the
-printer fail with `EHOSTUNREACH`. Apple-signed `/usr/bin/curl` is unaffected.
-
-The scanner transport handles this by itself. It prefers Node's sockets and switches
-to `curl` the first time a request is refused by policy, remembering the choice so the
-cost is paid once. A full scan measured 4.85 s through curl against 5.2 s natively, so
-there is no meaningful penalty. `get_device_status` says when the fallback is active.
-
-Override with `PRINTER_MCP_SCAN_TRANSPORT`: `auto` (default), `node`, or `curl`.
-
-## The printer sleeps
-
-An idle OfficeJet drops off the network. Its ARP entry expires, and the next
-connection fails instantly with `EHOSTUNREACH` — the kernel cannot resolve the
-device's MAC address. The failed attempt is itself what wakes the printer, so a
-moment later it answers normally.
-
-The scanner client therefore retries connection-level failures (three attempts,
-400 ms then 1200 ms). Only failures raised *before* the request reaches the printer
-are retried, so a scan job is never submitted twice. Errors the printer actually
-returns fail immediately rather than being retried.
-
-If you want to see the raw behaviour:
+Three unrelated problems all surface as `EHOSTUNREACH`, and the tool output looks
+identical for each. Two of them the server now handles by itself. Run this to tell
+them apart before changing anything:
 
 ```bash
 node -e "const s=require('node:net').connect({host:'192.168.1.50',port:443,timeout:5000});s.on('connect',()=>{console.log('CONNECTED');s.destroy()});s.on('error',e=>console.log(e.code));s.on('timeout',()=>{console.log('timeout');s.destroy()})"
 ```
 
-Run against a sleeping printer this prints `EHOSTUNREACH` once and `CONNECTED`
-afterwards. `curl` succeeding while Node reports `EHOSTUNREACH` is the same symptom,
-not evidence of a firewall.
+Compare it against `curl`, which is Apple-signed and carries its own permissions:
+
+```bash
+curl -sk -m 5 -o /dev/null -w "%{http_code}\n" https://192.168.1.50/eSCL/ScannerStatus
+```
+
+| What you see | Cause | Status |
+|---|---|---|
+| Fails once, then `CONNECTED` | The printer is asleep | Handled automatically |
+| Fails every time, but `curl` returns 200 | This process may not use the local network | Handled automatically |
+| Both fail | Printer off, or the address moved | Needs your attention |
+
+`get_device_status` performs the same comparison itself and reports which case it is,
+so you rarely need to run these by hand.
+
+### The printer is asleep
+
+An idle OfficeJet drops off the network. Its ARP entry expires, and the next
+connection fails instantly because the kernel cannot resolve the device's MAC address.
+The failed attempt is itself what wakes the printer, so a moment later it answers.
+
+The scanner retries connection-level failures three times, backing off 400 ms then
+1200 ms. Only failures raised *before* the request reaches the printer are retried, so
+a scan job is never submitted twice; an error the printer actually returns fails
+immediately.
+
+### This process may not use the local network
+
+On macOS 15 and later an application must hold **Local Network** access before it can
+reach devices on your network. A process that lacks it gets `EHOSTUNREACH` — the same
+error as a printer that is switched off.
+
+Granting the *app* is often not enough. Claude launches MCP servers through a wrapper
+that sets the macOS *disclaim* attribute, which makes the server responsible for its
+own privacy permissions rather than inheriting the app's. A bare `node` binary holds no
+such grant, so the server is blocked even when Claude itself is allowed. Running the
+same code from a terminal works, because it inherits the terminal's permission.
+
+The scanner transport handles this without configuration: it prefers Node's sockets
+and switches to `curl` the first time a request is refused by policy, remembering the
+choice so the cost is paid once. A full scan measured 4.85 s through curl against
+5.2 s natively, so there is no meaningful penalty. Override with
+`PRINTER_MCP_SCAN_TRANSPORT`: `auto` (default), `node`, or `curl`.
+
+An outbound firewall such as LuLu or Little Snitch blocks sockets the same way. If the
+fallback is active and you would rather it were not, look for a rule covering the node
+binary.
+
+### The printer is off, or its address changed
+
+If nothing on the Mac can reach it, the device is off, on another network, or its DHCP
+lease moved it. Set `PRINTER_MCP_PRINTER_HOST` (below) to the new address, and give the
+printer a fixed lease so it cannot move again.
 
 ## Configuration
 
@@ -212,7 +222,7 @@ All settings are optional; sensible defaults are used.
 
 | Variable | Default |
 |---|---|
-| `PRINTER_MCP_PRINTER_HOST` | `HPEXAMPLE12345.local` |
+| `PRINTER_MCP_PRINTER_HOST` | `HPEXAMPLE12345.local` (pin to the IPv4 address — see above) |
 | `PRINTER_MCP_CUPS_DEST` | `HP_OfficeJet_Pro_9010_series__EXAMPLE_` |
 | `PRINTER_MCP_SCAN_DIR` | `~/Documents/Scans` |
 | `PRINTER_MCP_ALLOWED_DIRS` | Documents, Downloads, Desktop, scan dir |
@@ -224,14 +234,23 @@ All settings are optional; sensible defaults are used.
 | `PRINTER_MCP_TLS` | on when a certificate exists; `0` forces plain HTTP |
 | `PRINTER_MCP_TLS_KEY` / `PRINTER_MCP_TLS_CERT` | `~/.config/printer-mcp/{key,cert}.pem` |
 | `PRINTER_MCP_ALLOWED_HOSTS` | extra hostnames accepted in the `Host` header |
+| `PRINTER_MCP_SCAN_TRANSPORT` | `auto`; `node` or `curl` to force one |
 
 ## Verifying against the real printer
 
 `npm test` covers the logic without touching hardware. To exercise the device:
 
 ```bash
-node scripts/smoke.mjs           # status, security guards, empty-feeder handling
-node scripts/smoke.mjs --scan    # also scans a page from the glass
-node scripts/smoke.mjs --print   # also prints one test page
-node scripts/smoke.mjs --copy    # also copies from the document feeder (needs paper)
+node scripts/smoke.mjs                # status, security guards, empty-feeder handling
+node scripts/smoke.mjs --scan         # scan one page from the glass
+node scripts/smoke.mjs --duplex       # scan both sides of a sheet from the feeder
+node scripts/smoke.mjs --stack        # scan two duplex sheets, check page ordering
+node scripts/smoke.mjs --print        # print one test page
+node scripts/smoke.mjs --print-file   # print a two-page file, duplex, two copies
+node scripts/smoke.mjs --copy         # copy from the feeder
+node scripts/smoke.mjs --copy-duplex  # copy double-sided to double-sided
 ```
+
+Flags other than the first need paper: `--scan` a page on the glass, everything with
+`adf` or `duplex` in it a stack in the feeder. Each feeder run pulls the whole stack
+through, so reload between runs. The printing flags use paper and ink.
