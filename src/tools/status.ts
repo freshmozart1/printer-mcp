@@ -75,8 +75,8 @@ export function registerStatusTools(server: McpServer, config: Config): void {
         lines.push(`Scanner: ${scanner.state}`);
         if (scanTransportInUse() === "curl") {
           lines.push(
-            "  (this process cannot open sockets to the printer, so scanning goes " +
-            "through curl — working, but see the README on Local Network permission)",
+            "  (scanning is going through curl rather than direct sockets; it will " +
+            "return to sockets by itself once they work — see the README)",
           );
         }
         lines.push(

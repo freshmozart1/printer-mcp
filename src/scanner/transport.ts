@@ -148,21 +148,48 @@ export interface Transport {
  */
 export function createTransport(
   mode: TransportMode = "auto",
-  deps: { node?: typeof nodeRequest; curl?: typeof curlRequest; onFallback?: () => void } = {},
+  deps: {
+    node?: typeof nodeRequest;
+    curl?: typeof curlRequest;
+    onFallback?: () => void;
+    onRecover?: () => void;
+    now?: () => number;
+    recheckAfterMs?: number;
+  } = {},
 ): Transport {
   const viaNode = deps.node ?? nodeRequest;
   const viaCurl = deps.curl ?? curlRequest;
+  const now = deps.now ?? (() => Date.now());
+  const recheckAfterMs = deps.recheckAfterMs ?? 5 * 60_000;
+
   let active: "node" | "curl" = mode === "curl" ? "curl" : "node";
+  let fellBackAt = 0;
 
   const transport = (async (url: string, options: RequestOptions = {}) => {
+    // The restriction that forced the fallback can be lifted while this process is
+    // running — granting Local Network access takes effect immediately — so retry the
+    // native path occasionally rather than staying on curl until restart.
+    if (active === "curl" && mode === "auto" && now() - fellBackAt > recheckAfterMs) {
+      try {
+        const result = await viaNode(url, options);
+        active = "node";
+        deps.onRecover?.();
+        return result;
+      } catch (error) {
+        if (!isBlockedByPolicy(error)) throw error;
+        fellBackAt = now(); // Still blocked; wait before trying again.
+      }
+    }
+
     if (active === "curl") return viaCurl(url, options);
 
     try {
       return await viaNode(url, options);
     } catch (error) {
       if (mode !== "auto" || !isBlockedByPolicy(error)) throw error;
-      // This process cannot open sockets to the printer; use curl from here on.
+      // This process cannot open sockets to the printer; use curl for now.
       active = "curl";
+      fellBackAt = now();
       deps.onFallback?.();
       return viaCurl(url, options);
     }
@@ -187,5 +214,7 @@ export const sharedTransport: Transport = createTransport(
         "printer-mcp: this process cannot open sockets to the printer " +
         "(no Local Network permission); falling back to curl",
       ),
+    onRecover: () =>
+      console.error("printer-mcp: sockets to the printer work again; leaving curl"),
   },
 );

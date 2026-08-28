@@ -108,6 +108,66 @@ describe("createTransport", () => {
     assert.equal(curlCalls, 0, "a real error must surface, not be masked by a fallback");
   });
 
+  test("returns to sockets once they work again", async () => {
+    // Granting Local Network access takes effect immediately, so a process that fell
+    // back must not stay on curl until it is restarted.
+    let blocked = true;
+    let clock = 0;
+    let recovered = false;
+    const t = createTransport("auto", {
+      node: async () => { if (blocked) throw err("EHOSTUNREACH"); return ok; },
+      curl: async () => ok,
+      now: () => clock,
+      recheckAfterMs: 1000,
+      onRecover: () => { recovered = true; },
+    });
+
+    await t("https://p/a");
+    assert.equal(t.current(), "curl", "should fall back while blocked");
+
+    blocked = false;
+    clock = 500;                       // too soon to retry
+    await t("https://p/b");
+    assert.equal(t.current(), "curl", "must not retry before the interval");
+
+    clock = 2000;                      // past the interval
+    await t("https://p/c");
+    assert.equal(t.current(), "node", "should return to sockets");
+    assert.equal(recovered, true);
+  });
+
+  test("keeps using curl while sockets are still blocked", async () => {
+    let clock = 0;
+    const t = createTransport("auto", {
+      node: async () => { throw err("EHOSTUNREACH"); },
+      curl: async () => ok,
+      now: () => clock,
+      recheckAfterMs: 1000,
+    });
+    await t("https://p/a");
+    clock = 5000;
+    const res = await t("https://p/b");   // retries node, fails, stays on curl
+    assert.equal(res.status, 200);
+    assert.equal(t.current(), "curl");
+  });
+
+  test("a real error during recheck is not swallowed", async () => {
+    let clock = 0;
+    let first = true;
+    const t = createTransport("auto", {
+      node: async () => {
+        if (first) { first = false; throw err("EHOSTUNREACH"); }
+        throw new Error("HTTP 500 from printer");
+      },
+      curl: async () => ok,
+      now: () => clock,
+      recheckAfterMs: 1000,
+    });
+    await t("https://p/a");
+    clock = 5000;
+    await assert.rejects(() => t("https://p/b"), /HTTP 500/);
+  });
+
   test("mode 'curl' skips Node entirely", async () => {
     let nodeCalls = 0;
     const t = createTransport("curl", {
