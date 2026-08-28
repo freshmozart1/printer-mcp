@@ -1,6 +1,7 @@
-import { Agent, request } from "node:https";
 import { setTimeout as delay } from "node:timers/promises";
 import { withRetry } from "./retry.ts";
+import { createTransport } from "./transport.ts";
+import type { HttpResult, TransportMode } from "./transport.ts";
 
 export type ScanSource = "adf" | "adf-duplex" | "flatbed";
 export type ScanColorMode = "color" | "grayscale" | "blackandwhite";
@@ -41,11 +42,6 @@ const FORMATS: Record<ScanFormat, string> = {
   pdf: "application/pdf",
   jpeg: "image/jpeg",
 };
-
-/** The printer serves eSCL over HTTPS with a self-signed certificate. */
-function agentFor(): Agent {
-  return new Agent({ rejectUnauthorized: false, keepAlive: false });
-}
 
 function tagValue(xml: string, localName: string): string | undefined {
   const m = new RegExp(`<(?:\\w+:)?${localName}>([^<]*)</(?:\\w+:)?${localName}>`).exec(xml);
@@ -144,14 +140,26 @@ export function buildScanSettingsXml(req: ScanRequest, caps: Capabilities): stri
 `;
 }
 
-interface HttpResult {
-  status: number;
-  headers: NodeJS.Dict<string | string[]>;
-  body: Buffer;
-}
+const base = (host: string) => `https://${host}/eSCL`;
+
+// One transport per process: once it has fallen back to curl, every later request
+// uses curl too rather than re-discovering the same restriction.
+const transport = createTransport(
+  (process.env.PRINTER_MCP_SCAN_TRANSPORT as TransportMode | undefined) ?? "auto",
+  {
+    onFallback: () =>
+      console.error(
+        "printer-mcp: this process cannot open sockets to the printer " +
+        "(no Local Network permission); falling back to curl for scanning",
+      ),
+  },
+);
+
+/** Which mechanism the scanner transport is currently using. */
+export const scanTransportInUse = (): "node" | "curl" => transport.current();
 
 /**
- * Perform one HTTP request, retrying connection-level failures.
+ * Perform one eSCL request, retrying connection-level failures.
  *
  * The printer sleeps when idle; the first attempt after that wakes it.
  */
@@ -159,46 +167,8 @@ function httpRequest(
   url: string,
   options: { method?: string; body?: string; timeoutMs?: number } = {},
 ): Promise<HttpResult> {
-  return withRetry(() => httpRequestOnce(url, options));
+  return withRetry(() => transport(url, options));
 }
-
-function httpRequestOnce(
-  url: string,
-  options: { method?: string; body?: string; timeoutMs?: number } = {},
-): Promise<HttpResult> {
-  return new Promise((resolve, reject) => {
-    const target = new URL(url);
-    const req = request(
-      {
-        host: target.hostname,
-        port: target.port || 443,
-        path: target.pathname + target.search,
-        method: options.method ?? "GET",
-        agent: agentFor(),
-        timeout: options.timeoutMs ?? 120_000,
-        headers: options.body
-          ? { "Content-Type": "text/xml", "Content-Length": Buffer.byteLength(options.body) }
-          : {},
-      },
-      (res) => {
-        const chunks: Buffer[] = [];
-        res.on("data", (c) => chunks.push(c));
-        res.on("end", () =>
-          resolve({
-            status: res.statusCode ?? 0,
-            headers: res.headers,
-            body: Buffer.concat(chunks),
-          }));
-      },
-    );
-    req.on("error", reject);
-    req.on("timeout", () => req.destroy(new Error(`Scanner timed out: ${url}`)));
-    if (options.body) req.write(options.body);
-    req.end();
-  });
-}
-
-const base = (host: string) => `https://${host}/eSCL`;
 
 export async function getScannerStatus(host: string): Promise<ScannerStatus> {
   const res = await httpRequest(`${base(host)}/ScannerStatus`, { timeoutMs: 15_000 });

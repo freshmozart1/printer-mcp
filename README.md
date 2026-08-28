@@ -151,6 +151,21 @@ the machine can reach the printer, and says whether the device is absent or this
 process is being blocked. An outbound firewall such as LuLu or Little Snitch produces
 the same symptom and is reported alongside.
 
+## Scanning from an app that cannot use the local network
+
+Claude launches MCP servers through a wrapper that sets the macOS *disclaim*
+attribute, which makes the server responsible for its own privacy permissions instead
+of inheriting the app's. Granting Claude Local Network access therefore does not help
+the server: a bare `node` binary has no such grant of its own, and its sockets to the
+printer fail with `EHOSTUNREACH`. Apple-signed `/usr/bin/curl` is unaffected.
+
+The scanner transport handles this by itself. It prefers Node's sockets and switches
+to `curl` the first time a request is refused by policy, remembering the choice so the
+cost is paid once. A full scan measured 4.85 s through curl against 5.2 s natively, so
+there is no meaningful penalty. `get_device_status` says when the fallback is active.
+
+Override with `PRINTER_MCP_SCAN_TRANSPORT`: `auto` (default), `node`, or `curl`.
+
 ## The printer sleeps
 
 An idle OfficeJet drops off the network. Its ARP entry expires, and the next

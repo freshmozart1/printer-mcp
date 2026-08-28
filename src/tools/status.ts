@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { listDestinations, listJobs } from "../printer/cups.ts";
 import { queryPrinterStatus } from "../printer/ipp.ts";
-import { getScannerStatus } from "../scanner/escl.ts";
+import { getScannerStatus, scanTransportInUse } from "../scanner/escl.ts";
 import { diagnoseUnreachable } from "../scanner/diagnose.ts";
 import type { Config } from "../config.ts";
 
@@ -66,6 +66,12 @@ export function registerStatusTools(server: McpServer, config: Config): void {
         lines.push(...hint.split("\n").map((l) => `  ${l}`));
       } else {
         lines.push(`Scanner: ${scanner.state}`);
+        if (scanTransportInUse() === "curl") {
+          lines.push(
+            "  (this process cannot open sockets to the printer, so scanning goes " +
+            "through curl — working, but see the README on Local Network permission)",
+          );
+        }
         lines.push(
           `  Document feeder: ${
             scanner.adfLoaded
