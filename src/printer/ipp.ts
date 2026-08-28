@@ -101,11 +101,22 @@ export function toPrinterStatus(attrs: Record<string, unknown>): PrinterStatus {
  */
 export async function queryPrinterStatus(printerHost: string): Promise<PrinterStatus> {
   const uri = `ipps://${printerHost}:631/ipp/print`;
-  const { stdout: plist } = await withRetry(() =>
-    run("ipptool", ["-X", uri, ATTRIBUTES_REQUEST], {
-      timeout: 15_000,
-      maxBuffer: 8 * 1024 * 1024,
-    }));
+  let plist: string;
+  try {
+    ({ stdout: plist } = await withRetry(() =>
+      run("ipptool", ["-X", uri, ATTRIBUTES_REQUEST], {
+        timeout: 15_000,
+        maxBuffer: 8 * 1024 * 1024,
+      })));
+  } catch (error) {
+    // ipptool is a separate process and cannot use the curl fallback, so where raw
+    // sockets are denied it fails even though HTTP to the printer still works.
+    // HP's own endpoints reach the same device over the shared transport.
+    const { queryStatusOverHttp } = await import("./devmgmt.ts");
+    return queryStatusOverHttp(printerHost).catch(() => {
+      throw error; // Report the original failure if the fallback cannot help either.
+    });
+  }
   // Let macOS parse its own plist format rather than hand-rolling a parser.
   const json = await plutilToJson(plist);
   return toPrinterStatus(mergeResponseAttributes(json));

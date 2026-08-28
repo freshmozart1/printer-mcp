@@ -188,6 +188,13 @@ immediately.
 
 ### This process may not use the local network
 
+Status has a second route for the same reason. `ipptool` is a separate process and
+cannot use the curl fallback, so where raw sockets are denied it fails even though
+HTTP to the printer still works. When it does, the status query falls back to HP's own
+`/DevMgmt/*.xml` endpoints over the shared transport, which reports state and ink
+levels but not the loaded paper size.
+
+
 On macOS 15 and later an application must hold **Local Network** access before it can
 reach devices on your network. A process that lacks it gets `EHOSTUNREACH` — the same
 error as a printer that is switched off.

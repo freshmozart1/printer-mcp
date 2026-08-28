@@ -1,7 +1,7 @@
 import { setTimeout as delay } from "node:timers/promises";
 import { withRetry } from "../retry.ts";
-import { createTransport } from "./transport.ts";
-import type { HttpResult, TransportMode } from "./transport.ts";
+import { sharedTransport as transport } from "./transport.ts";
+import type { HttpResult } from "./transport.ts";
 
 export type ScanSource = "adf" | "adf-duplex" | "flatbed";
 export type ScanColorMode = "color" | "grayscale" | "blackandwhite";
@@ -141,19 +141,6 @@ export function buildScanSettingsXml(req: ScanRequest, caps: Capabilities): stri
 }
 
 const base = (host: string) => `https://${host}/eSCL`;
-
-// One transport per process: once it has fallen back to curl, every later request
-// uses curl too rather than re-discovering the same restriction.
-const transport = createTransport(
-  (process.env.PRINTER_MCP_SCAN_TRANSPORT as TransportMode | undefined) ?? "auto",
-  {
-    onFallback: () =>
-      console.error(
-        "printer-mcp: this process cannot open sockets to the printer " +
-        "(no Local Network permission); falling back to curl for scanning",
-      ),
-  },
-);
 
 /** Which mechanism the scanner transport is currently using. */
 export const scanTransportInUse = (): "node" | "curl" => transport.current();

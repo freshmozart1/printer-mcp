@@ -171,3 +171,21 @@ export function createTransport(
   Object.defineProperty(transport, "current", { value: () => active });
   return transport;
 }
+
+/**
+ * The transport shared by every request to the printer.
+ *
+ * Scanning and status both go through it, so a fallback discovered by one applies to
+ * the other: a process that cannot open sockets for scanning cannot open them for
+ * status either.
+ */
+export const sharedTransport: Transport = createTransport(
+  (process.env.PRINTER_MCP_SCAN_TRANSPORT as TransportMode | undefined) ?? "auto",
+  {
+    onFallback: () =>
+      console.error(
+        "printer-mcp: this process cannot open sockets to the printer " +
+        "(no Local Network permission); falling back to curl",
+      ),
+  },
+);
